@@ -18,11 +18,15 @@ function limiter_zhang_shu!(u, threshold::Real, variable,
 
         for element_id_old in 1:refined_elements[end]
             if element_id_old in refined_elements
+                # Increment `element_id` on the refined mesh with the number
+                # of children, i.e., 4 in 2D
+                element_id += 2^ndims(mesh)
+
                 theta_vec .= one(eltype(u))
                 u_mean_vec .= zero(eltype(u))
                 # Iterate over the children of the current element
                 for new_element in 1:(2^ndims(mesh))
-                    new_element_id = element_id + new_element - 1
+                    new_element_id = element_id + new_element - 1 - 2^ndims(mesh)
 
                     # determine minimum value
                     value_min = typemax(eltype(u))
@@ -61,7 +65,7 @@ function limiter_zhang_shu!(u, threshold::Real, variable,
 
                 # Iterate again over the children to apply synchronized shifting
                 for new_element in 1:(2^ndims(mesh))
-                    new_element_id = element_id + new_element - 1
+                    new_element_id = element_id + new_element - 1 - 2^ndims(mesh)
                     for j in eachnode(dg), i in eachnode(dg)
                         u_node = get_node_vars(u, equations, dg, i, j, new_element_id)
                         u_mean = get_node_vars(u_mean_vec, equations, dg, new_element)
@@ -71,10 +75,6 @@ function limiter_zhang_shu!(u, threshold::Real, variable,
                                        equations, dg, i, j, new_element_id)
                     end
                 end
-
-                # Increment `element_id` on the refined mesh with the number
-                # of children, i.e., 4 in 2D
-                element_id += 2^ndims(mesh)
             else
                 # Increment `element_id` on the unrefined mesh
                 element_id += 1
