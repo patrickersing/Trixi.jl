@@ -83,6 +83,14 @@ function limiter_zhang_shu!(u, thresholds::Tuple{}, variables::Tuple{},
     nothing
 end
 
+@inline function limiter_zhang_shu_refined_elements!(u, threshold::Real, variable,
+                                                     mesh, equations,
+                                                     dg::DGSEM,
+                                                     refined_elements::Nothing,
+                                                     u_mean_refined_elements)
+    nothing
+end
+
 include("positivity_zhang_shu_dg1d.jl")
 include("positivity_zhang_shu_dg2d.jl")
 include("positivity_zhang_shu_dg3d.jl")

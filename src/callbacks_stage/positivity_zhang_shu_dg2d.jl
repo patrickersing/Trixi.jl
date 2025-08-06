@@ -12,18 +12,14 @@ function limiter_zhang_shu!(u, threshold::Real, variable,
     @unpack weights = dg.basis
     @unpack inverse_jacobian = cache.elements
 
-    if !isnothing(refined_elements)
-        @assert length(refined_elements)==size(u_mean_refined_elements, 2) "The length of `refined_elements` must match the second dimension of `u_mean_refined_elements`."
-
-        @trixi_timeit timer() "limiter_zhang_shu_refined_elements!" limiter_zhang_shu_refined_elements!(u,
-                                                                                                        threshold,
-                                                                                                        variable,
-                                                                                                        mesh,
-                                                                                                        equations,
-                                                                                                        dg,
-                                                                                                        refined_elements,
-                                                                                                        u_mean_refined_elements)
-    end
+    @trixi_timeit timer() "limiter_zhang_shu_refined_elements!" limiter_zhang_shu_refined_elements!(u,
+                                                                                                    threshold,
+                                                                                                    variable,
+                                                                                                    mesh,
+                                                                                                    equations,
+                                                                                                    dg,
+                                                                                                    refined_elements,
+                                                                                                    u_mean_refined_elements)
 
     @threaded for element in eachelement(dg, cache)
         # determine minimum value
@@ -66,8 +62,9 @@ end
 @inline function limiter_zhang_shu_refined_elements!(u, threshold::Real, variable,
                                                      mesh::AbstractMesh{2}, equations,
                                                      dg::DGSEM,
-                                                     refined_elements,
+                                                     refined_elements::Vector{Int},
                                                      u_mean_refined_elements)
+    @assert length(refined_elements)==size(u_mean_refined_elements, 2) "The length of `refined_elements` must match the second dimension of `u_mean_refined_elements`."
     @assert maximum(refined_elements)==refined_elements[end] "The maximum element id in `refined_elements` must be equal to the last element id in the mesh."
 
     element_id_new = 1
