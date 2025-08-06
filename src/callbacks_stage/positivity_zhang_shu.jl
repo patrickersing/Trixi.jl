@@ -40,9 +40,12 @@ end
 
 # Version used by the AMR callback
 function (limiter!::PositivityPreservingLimiterZhangShu)(u, mesh, equations, solver,
-                                                         cache; refined_elements = [])
+                                                         cache;
+                                                         refined_elements = nothing,
+                                                         u_mean_refined_elements = nothing)
     limiter_zhang_shu!(u, limiter!.thresholds, limiter!.variables, mesh, equations,
-                       solver, cache; refined_elements = refined_elements)
+                       solver, cache; refined_elements = refined_elements,
+                       u_mean_refined_elements = u_mean_refined_elements)
 end
 
 # Iterate over tuples in a type-stable way using "lispy tuple programming",
@@ -55,24 +58,28 @@ end
 # is definitely fine.
 function limiter_zhang_shu!(u, thresholds::NTuple{N, <:Real}, variables::NTuple{N, Any},
                             mesh, equations, solver, cache;
-                            refined_elements = []) where {N}
+                            refined_elements = nothing,
+                            u_mean_refined_elements = nothing) where {N}
     threshold = first(thresholds)
     remaining_thresholds = Base.tail(thresholds)
     variable = first(variables)
     remaining_variables = Base.tail(variables)
 
     limiter_zhang_shu!(u, threshold, variable, mesh, equations, solver, cache,
-                       refined_elements = refined_elements)
+                       refined_elements = refined_elements,
+                       u_mean_refined_elements = u_mean_refined_elements)
     limiter_zhang_shu!(u, remaining_thresholds, remaining_variables, mesh, equations,
                        solver, cache,
-                       refined_elements = refined_elements)
+                       refined_elements = refined_elements,
+                       u_mean_refined_elements = u_mean_refined_elements)
     return nothing
 end
 
 # terminate the type-stable iteration over tuples
 function limiter_zhang_shu!(u, thresholds::Tuple{}, variables::Tuple{},
                             mesh, equations, solver, cache;
-                            refined_elements = [])
+                            refined_elements = nothing,
+                            u_mean_refined_elements = nothing)
     nothing
 end
 
