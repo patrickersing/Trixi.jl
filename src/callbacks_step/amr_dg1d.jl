@@ -23,6 +23,23 @@ function refine!(u_ode::AbstractVector, adaptor, mesh::TreeMesh{1},
     GC.@preserve old_u_ode begin # OBS! If we don't GC.@preserve old_u_ode, it might be GC'ed
         old_u = wrap_array(old_u_ode, mesh, equations, dg, cache)
 
+        # Compute mean values for the elements to be refined
+        (; weights) = dg.basis
+        u_mean_refined_elements = Matrix{eltype(u_ode)}(undef, nvariables(equations),
+                                                        length(elements_to_refine))
+        for element in eachindex(elements_to_refine)
+            old_element_id = elements_to_refine[element]
+            # compute mean value
+            u_mean = zero(get_node_vars(old_u, equations, dg, 1, old_element_id))
+            for i in eachnode(dg)
+                u_node = get_node_vars(old_u, equations, dg, i, element)
+                u_mean += u_node * weights[i]
+            end
+            # note that the reference element is [-1,1]^ndims(dg), thus the weights sum to 2
+            u_mean = u_mean / 2^ndims(mesh)
+            set_node_vars!(u_mean_refined_elements, u_mean, equations, dg, element)
+        end
+
         # Get new list of leaf cells
         leaf_cell_ids = local_leaf_cells(mesh.tree)
 

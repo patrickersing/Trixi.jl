@@ -6,8 +6,23 @@
 #! format: noindent
 
 function limiter_zhang_shu!(u, threshold::Real, variable,
-                            mesh::AbstractMesh{1}, equations, dg::DGSEM, cache)
+                            mesh::AbstractMesh{1}, equations, dg::DGSEM, cache;
+                            refined_elements = nothing,
+                            u_mean_refined_elements = nothing)
     @unpack weights = dg.basis
+
+    if !isnothing(refined_elements)
+        @assert length(refined_elements)==size(u_mean_refined_elements, 2) "The length of `refined_elements` must match the second dimension of `u_mean_refined_elements`."
+
+        @trixi_timeit timer() "limiter_zhang_shu_refined_elements!" limiter_zhang_shu_refined_elements!(u,
+                                                                                                        threshold,
+                                                                                                        variable,
+                                                                                                        mesh,
+                                                                                                        equations,
+                                                                                                        dg,
+                                                                                                        refined_elements,
+                                                                                                        u_mean_refined_elements)
+    end
 
     @threaded for element in eachelement(dg, cache)
         # determine minimum value
@@ -37,6 +52,69 @@ function limiter_zhang_shu!(u, threshold::Real, variable,
             u_node = get_node_vars(u, equations, dg, i, element)
             set_node_vars!(u, theta * u_node + (1 - theta) * u_mean,
                            equations, dg, i, element)
+        end
+    end
+
+    return nothing
+end
+
+@inline function limiter_zhang_shu_refined_elements!(u, threshold::Real, variable,
+                                                     mesh::AbstractMesh{3}, equations,
+                                                     dg::DGSEM,
+                                                     refined_elements,
+                                                     u_mean_refined_elements)
+    @assert maximum(refined_elements)==refined_elements[end] "The maximum element id in `refined_elements` must be equal to the last element id in the mesh."
+
+    element_id_new = 1
+    refined_element = 0
+    for element_id_old in 1:refined_elements[end]
+        if element_id_old in refined_elements
+            refined_element += 1
+            # Increment `element_id_new` on the refined mesh with the number
+            # of children, i.e., 4 in 2D
+            element_id_new += 2^ndims(mesh)
+
+            u_mean = get_node_vars(u_mean_refined_elements, equations, dg,
+                                   refined_element)
+
+            # We compute the value directly with the mean values, as we assume that
+            # Jensen's inequality holds (e.g. pressure for compressible Euler equations).
+            value_mean = variable(u_mean, equations)
+
+            theta = one(eltype(u))
+
+            # Iterate over the children of the current element
+            for new_element in 1:(2^ndims(mesh))
+                new_element_id = element_id_new + new_element - 1 - 2^ndims(mesh)
+
+                # determine minimum value
+                value_min = typemax(eltype(u))
+                for i in eachnode(dg)
+                    u_node = get_node_vars(u, equations, dg, i, new_element_id)
+                    value_min = min(value_min, variable(u_node, equations))
+                end
+
+                # detect if limiting is necessary
+                value_min < threshold || continue
+
+                theta = min(theta, (value_mean - threshold) / (value_mean - value_min))
+            end
+            theta < 1 || continue
+
+            # Iterate again over the children to apply synchronized shifting
+            for new_element in 1:(2^ndims(mesh))
+                new_element_id = element_id_new + new_element - 1 - 2^ndims(mesh)
+
+                for i in eachnode(dg)
+                    u_node = get_node_vars(u, equations, dg, i, new_element_id)
+                    set_node_vars!(u,
+                                   theta * u_node + (1 - theta) * u_mean,
+                                   equations, dg, i, new_element_id)
+                end
+            end
+        else
+            # Increment `element_id_new` on the unrefined mesh
+            element_id_new += 1
         end
     end
 
