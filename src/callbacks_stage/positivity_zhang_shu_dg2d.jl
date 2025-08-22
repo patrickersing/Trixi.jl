@@ -103,6 +103,9 @@ end
             end
             theta < 1 || continue
 
+            # Make sure to really reach the threshold and not only by machine precision
+            theta -= eps(typeof(theta))
+
             # Iterate again over the children to apply synchronized shifting
             for new_element in 1:(2^ndims(mesh))
                 new_element_id = element_id_new + new_element - 1 - 2^ndims(mesh)
