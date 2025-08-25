@@ -6,20 +6,9 @@
 #! format: noindent
 
 function limiter_zhang_shu!(u, threshold::Real, variable,
-                            mesh::AbstractMesh{2}, equations, dg::DGSEM, cache;
-                            refined_elements = nothing,
-                            u_mean_refined_elements = nothing)
+                            mesh::AbstractMesh{2}, equations, dg::DGSEM, cache)
     @unpack weights = dg.basis
     @unpack inverse_jacobian = cache.elements
-
-    @trixi_timeit timer() "limiter_zhang_shu_refined_elements!" limiter_zhang_shu_refined_elements!(u,
-                                                                                                    threshold,
-                                                                                                    variable,
-                                                                                                    mesh,
-                                                                                                    equations,
-                                                                                                    dg,
-                                                                                                    refined_elements,
-                                                                                                    u_mean_refined_elements)
 
     @threaded for element in eachelement(dg, cache)
         # determine minimum value
@@ -68,11 +57,9 @@ end
 #   Lax-Wendroff flux reconstruction on adaptive curvilinear meshes with
 #   error based time stepping for hyperbolic conservation laws
 #    [doi: 10.1016/j.jcp.2024.113622](https://doi.org/10.1016/j.jcp.2024.113622)
-@inline function limiter_zhang_shu_refined_elements!(u, threshold::Real, variable,
-                                                     mesh::AbstractMesh{2}, equations,
-                                                     dg::DGSEM,
-                                                     refined_elements::Vector{Int},
-                                                     u_mean_refined_elements)
+function limiter_zhang_shu!(u, threshold::Real, variable, mesh::AbstractMesh{2},
+                            equations, dg::DGSEM, cache,
+                            refined_elements::Vector{Int}, u_mean_refined_elements)
     @assert length(refined_elements)==size(u_mean_refined_elements, 2) "The length of `refined_elements` must match the second dimension of `u_mean_refined_elements`."
     @assert maximum(refined_elements)==refined_elements[end] "The maximum element id in `refined_elements` must be equal to the last element id in the mesh."
 
