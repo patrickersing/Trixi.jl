@@ -92,7 +92,9 @@ function refine!(u_ode::AbstractVector, adaptor, mesh::TreeMesh{1},
 
     # Apply the positivity limiter to the solution
     if limiter! !== nothing
-        limiter!(u, mesh, equations, dg, cache)
+        limiter!(u, mesh, equations, dg, cache;
+                 refined_elements = elements_to_refine,
+                 u_mean_refined_elements = u_mean_refined_elements)
     end
 
     return nothing

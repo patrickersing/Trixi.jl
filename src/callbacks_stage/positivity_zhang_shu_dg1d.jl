@@ -62,8 +62,8 @@ end
     @assert length(refined_elements)==size(u_mean_refined_elements, 2) "The length of `refined_elements` must match the second dimension of `u_mean_refined_elements`."
     @assert maximum(refined_elements)==refined_elements[end] "The maximum element id in `refined_elements` must be equal to the last element id in the mesh."
 
-    element_id_new = 1
-    refined_element = 0
+    element_id_new = 1 # Element id after refinement
+    refined_element = 0 # Index variable for the refined elements
     for element_id_old in 1:refined_elements[end]
         if element_id_old in refined_elements
             refined_element += 1
@@ -71,6 +71,7 @@ end
             # of children, i.e., 4 in 2D
             element_id_new += 2^ndims(mesh)
 
+            # Get the mean value from the parent element
             u_mean = get_node_vars(u_mean_refined_elements, equations, dg,
                                    refined_element)
 
@@ -80,7 +81,7 @@ end
 
             theta = one(eltype(u))
 
-            # Iterate over the children of the current element
+            # Iterate over the children of the current element to determine a joint limiting coefficient `theta`
             for new_element in 1:(2^ndims(mesh))
                 new_element_id = element_id_new + new_element - 1 - 2^ndims(mesh)
 
@@ -97,6 +98,9 @@ end
                 theta = min(theta, (value_mean - threshold) / (value_mean - value_min))
             end
             theta < 1 || continue
+
+            # Make sure to really reach the threshold and not only by machine precision
+            theta -= eps(typeof(theta))
 
             # Iterate again over the children to apply synchronized shifting
             for new_element in 1:(2^ndims(mesh))
