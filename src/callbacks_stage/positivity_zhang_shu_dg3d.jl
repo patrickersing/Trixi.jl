@@ -59,6 +59,15 @@ function limiter_zhang_shu!(u, threshold::Real, variable,
     return nothing
 end
 
+# Modified version of the limiter used in the refinement step of the AMR callback.
+# To ensure admissibility after the refinement step, we compute a joint
+# limiting coefficient for all children elements and then limit against the
+# admissible mean value of the parent element.
+# This strategy is described in Remark 3 of the paper:
+# - Arpit Babbar, Praveen Chandrashekar (2025)
+#   Lax-Wendroff flux reconstruction on adaptive curvilinear meshes with
+#   error based time stepping for hyperbolic conservation laws
+#    [doi: 10.1016/j.jcp.2024.113622](https://doi.org/10.1016/j.jcp.2024.113622)
 @inline function limiter_zhang_shu_refined_elements!(u, threshold::Real, variable,
                                                      mesh::AbstractMesh{3}, equations,
                                                      dg::DGSEM,
