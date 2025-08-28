@@ -54,18 +54,8 @@ end
 #   [doi: 10.1016/j.jcp.2024.113622](https://doi.org/10.1016/j.jcp.2024.113622)
 function limiter_zhang_shu!(u, threshold::Real, variable, mesh::AbstractMesh{1},
                             equations, dg::DGSEM, cache,
-                            refined_elements::Vector{Int}, u_mean_refined_elements)
-    @assert length(refined_elements)==size(u_mean_refined_elements, 2) "The length of `refined_elements` must match the second dimension of `u_mean_refined_elements`."
-
-    # Precompute list with new element ids after refinement
-    # Only save the last element id of the child elements and address all with (element_ids_new[i] - 2^ndims(mesh) + 1):element_ids_new[i]
-    element_ids_new = copy(refined_elements)
-    for i in eachindex(element_ids_new)
-        # Each refined element increases the ids of all following elements by 2^ndims(mesh) - 1
-        for j in i:length(element_ids_new)
-            element_ids_new[j] += 2^ndims(mesh) - 1
-        end
-    end
+                            element_ids_new::Vector{Int}, u_mean_refined_elements)
+    @assert length(element_ids_new)==size(u_mean_refined_elements, 2) "The length of `element_ids_new` must match the second dimension of `u_mean_refined_elements`."
 
     @threaded for i in eachindex(element_ids_new)
         # Get the mean value from the parent element
@@ -78,7 +68,7 @@ function limiter_zhang_shu!(u, threshold::Real, variable, mesh::AbstractMesh{1},
         theta = one(eltype(u))
 
         # Iterate over the children of the current element to determine a joint limiting coefficient `theta`
-        for new_element_id in (element_ids_new[i] - 2^ndims(mesh) + 1):element_ids_new[i]
+        for new_element_id in element_ids_new[i]:(element_ids_new[i] + 2^ndims(mesh) - 1)
             # determine minimum value
             value_min = typemax(eltype(u))
             for i in eachnode(dg)
@@ -98,7 +88,7 @@ function limiter_zhang_shu!(u, threshold::Real, variable, mesh::AbstractMesh{1},
         theta -= eps(typeof(theta))
 
         # Iterate again over the children to apply joint shifting
-        for new_element_id in (element_ids_new[i] - 2^ndims(mesh) + 1):element_ids_new[i]
+        for new_element_id in element_ids_new[i]:(element_ids_new[i] + 2^ndims(mesh) - 1)
             for i in eachnode(dg)
                 u_node = get_node_vars(u, equations, dg, i, new_element_id)
                 set_node_vars!(u,
@@ -116,19 +106,9 @@ end
 # the coarsened elements.
 function limiter_zhang_shu!(u, threshold::Real, variable,
                             mesh::AbstractMesh{1}, equations, dg::DGSEM, cache,
-                            removed_elements::Vector{Int})
-    @assert length(removed_elements) % (2^ndims(mesh))==0 "The length of `removed_elements` must be a multiple of 2^ndims(mesh)."
-
+                            element_ids_new::Vector{Int})
     @unpack weights = dg.basis
     @unpack inverse_jacobian = cache.elements
-
-    # Precompute list with new element ids after refinement
-    element_ids_new = zeros(Int, div(length(removed_elements), 2^ndims(mesh)))
-    for i in eachindex(element_ids_new)
-        # The new element id is the id of the first child minus (2^ndims(mesh) - 1) times the number of already coarsened elements.
-        element_ids_new[i] = removed_elements[2^ndims(mesh) * (i - 1) + 1] -
-                             (2^ndims(mesh) - 1) * (i - 1)
-    end
 
     # Apply limiter to coarsened elements
     @threaded for element in element_ids_new

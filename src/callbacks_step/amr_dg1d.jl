@@ -96,8 +96,11 @@ function refine!(u_ode::AbstractVector, adaptor, mesh::TreeMesh{1},
 
     # Apply the positivity limiter to the solution
     if limiter! !== nothing
+        # Precompute list with new element ids after refinement
+        element_ids_new = compute_new_id_refined_elements(elements_to_refine, mesh)
+
         @trixi_timeit timer() "limiter!" limiter!(u, mesh, equations, dg, cache,
-                                                  elements_to_refine,
+                                                  element_ids_new,
                                                   u_mean_refined_elements)
     end
 
@@ -249,8 +252,11 @@ function coarsen!(u_ode::AbstractVector, adaptor, mesh::TreeMesh{1},
 
     # Apply the positivity limiter to the solution
     if limiter! !== nothing
+        # Precompute list with new element ids after coarsening
+        element_ids_new = compute_new_id_removed_elements(elements_to_remove, mesh)
+
         @trixi_timeit timer() "limiter!" limiter!(u, mesh, equations, dg, cache,
-                                                  elements_to_remove)
+                                                  element_ids_new)
     end
 
     return nothing
