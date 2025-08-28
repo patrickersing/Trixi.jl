@@ -61,7 +61,6 @@ function limiter_zhang_shu!(u, threshold::Real, variable, mesh::AbstractMesh{2},
                             equations, dg::DGSEM, cache,
                             refined_elements::Vector{Int}, u_mean_refined_elements)
     @assert length(refined_elements)==size(u_mean_refined_elements, 2) "The length of `refined_elements` must match the second dimension of `u_mean_refined_elements`."
-    @assert maximum(refined_elements)==refined_elements[end] "The maximum element id in `refined_elements` must be equal to the last element id in the mesh."
 
     # Precompute list with new element ids after refinement
     # Only save the last element id of the child elements and address all with (element_ids_new[i] - 2^ndims(mesh) + 1):element_ids_new[i]
