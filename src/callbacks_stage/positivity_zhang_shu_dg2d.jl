@@ -63,60 +63,54 @@ function limiter_zhang_shu!(u, threshold::Real, variable, mesh::AbstractMesh{2},
     @assert length(refined_elements)==size(u_mean_refined_elements, 2) "The length of `refined_elements` must match the second dimension of `u_mean_refined_elements`."
     @assert maximum(refined_elements)==refined_elements[end] "The maximum element id in `refined_elements` must be equal to the last element id in the mesh."
 
-    element_id_new = 1 # Element id after refinement
-    refined_element = 0 # Index variable for the refined elements
-    for element_id_old in 1:refined_elements[end]
-        if element_id_old in refined_elements
-            refined_element += 1
-            # Increment `element_id_new` on the refined mesh with the number
-            # of children, i.e., 4 in 2D
-            element_id_new += 2^ndims(mesh)
+    # Precompute list with new element ids after refinement
+    # Only save the last element id of the child elements and address all with (element_ids_new[i] - 2^ndims(mesh) + 1):element_ids_new[i]
+    element_ids_new = copy(refined_elements)
+    for i in eachindex(element_ids_new)
+        # Each refined element increases the ids of all following elements by 2^ndims(mesh) - 1
+        for j in i:length(element_ids_new)
+            element_ids_new[j] += 2^ndims(mesh) - 1
+        end
+    end
 
-            # Get the mean value from the parent element
-            u_mean = get_node_vars(u_mean_refined_elements, equations, dg,
-                                   refined_element)
+    @threaded for i in eachindex(element_ids_new)
+        # Get the mean value from the parent element
+        u_mean = get_node_vars(u_mean_refined_elements, equations, dg, i)
 
-            # We compute the value directly with the mean values, as we assume that
-            # Jensen's inequality holds (e.g. pressure for compressible Euler equations).
-            value_mean = variable(u_mean, equations)
+        # We compute the value directly with the mean values, as we assume that
+        # Jensen's inequality holds (e.g. pressure for compressible Euler equations).
+        value_mean = variable(u_mean, equations)
 
-            theta = one(eltype(u))
+        theta = one(eltype(u))
 
-            # Iterate over the children of the current element to determine a joint limiting coefficient `theta`
-            for new_element in 1:(2^ndims(mesh))
-                new_element_id = element_id_new + new_element - 1 - 2^ndims(mesh)
-
-                # determine minimum value
-                value_min = typemax(eltype(u))
-                for j in eachnode(dg), i in eachnode(dg)
-                    u_node = get_node_vars(u, equations, dg, i, j, new_element_id)
-                    value_min = min(value_min, variable(u_node, equations))
-                end
-
-                # detect if limiting is necessary
-                value_min < threshold || continue
-
-                theta = min(theta, (value_mean - threshold) / (value_mean - value_min))
+        # Iterate over the children of the current element to determine a joint limiting coefficient `theta`
+        for new_element_id in (element_ids_new[i] - 2^ndims(mesh) + 1):element_ids_new[i]
+            # determine minimum value
+            value_min = typemax(eltype(u))
+            for j in eachnode(dg), i in eachnode(dg)
+                u_node = get_node_vars(u, equations, dg, i, j, new_element_id)
+                value_min = min(value_min, variable(u_node, equations))
             end
-            theta < 1 || continue
 
-            # Make sure to really reach the threshold and not only by machine precision
-            theta -= eps(typeof(theta))
+            # detect if limiting is necessary
+            value_min < threshold || continue
 
-            # Iterate again over the children to apply synchronized shifting
-            for new_element in 1:(2^ndims(mesh))
-                new_element_id = element_id_new + new_element - 1 - 2^ndims(mesh)
+            theta = min(theta, (value_mean - threshold) / (value_mean - value_min))
+        end
 
-                for j in eachnode(dg), i in eachnode(dg)
-                    u_node = get_node_vars(u, equations, dg, i, j, new_element_id)
-                    set_node_vars!(u,
-                                   theta * u_node + (1 - theta) * u_mean,
-                                   equations, dg, i, j, new_element_id)
-                end
+        theta < 1 || continue
+
+        # Make sure to really reach the threshold and not only by machine precision
+        theta -= eps(typeof(theta))
+
+        # Iterate again over the children to apply joint shifting
+        for new_element_id in (element_ids_new[i] - 2^ndims(mesh) + 1):element_ids_new[i]
+            for j in eachnode(dg), i in eachnode(dg)
+                u_node = get_node_vars(u, equations, dg, i, j, new_element_id)
+                set_node_vars!(u,
+                               theta * u_node + (1 - theta) * u_mean,
+                               equations, dg, i, j, new_element_id)
             end
-        else
-            # Increment `element_id_new` on the unrefined mesh
-            element_id_new += 1
         end
     end
 

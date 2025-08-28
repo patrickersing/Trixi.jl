@@ -202,8 +202,9 @@ function refine!(u_ode::AbstractVector, adaptor, mesh::Union{TreeMesh{2}, P4estM
 
     # Apply the positivity limiter to the solution
     if limiter! !== nothing
-        limiter!(u, mesh, equations, dg, cache,
-                 elements_to_refine, u_mean_refined_elements)
+        @trixi_timeit timer() "limiter!" limiter!(u, mesh, equations, dg, cache,
+                                                  elements_to_refine,
+                                                  u_mean_refined_elements)
     end
 
     return nothing
@@ -409,7 +410,7 @@ function coarsen!(u_ode::AbstractVector, adaptor,
 
     # Apply the positivity limiter to the solution
     if limiter! !== nothing
-        limiter!(u, mesh, equations, dg, cache)
+        @trixi_timeit timer() "limiter!" limiter!(u, mesh, equations, dg, cache)
     end
 
     return nothing
