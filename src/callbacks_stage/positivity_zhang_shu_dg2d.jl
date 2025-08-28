@@ -131,7 +131,7 @@ function limiter_zhang_shu!(u, threshold::Real, variable,
     element_ids_new = zeros(Int, div(length(removed_elements), 2^ndims(mesh)))
     for i in eachindex(element_ids_new)
         # The new element id is the id of the first child minus (2^ndims(mesh) - 1) times the number of already coarsened elements.
-        element_ids_new[i] = removed_elements[4 * (i - 1) + 1] -
+        element_ids_new[i] = removed_elements[2^ndims(mesh) * (i - 1) + 1] -
                              (2^ndims(mesh) - 1) * (i - 1)
     end
 
