@@ -410,7 +410,8 @@ function coarsen!(u_ode::AbstractVector, adaptor,
 
     # Apply the positivity limiter to the solution
     if limiter! !== nothing
-        @trixi_timeit timer() "limiter!" limiter!(u, mesh, equations, dg, cache)
+        @trixi_timeit timer() "limiter!" limiter!(u, mesh, equations, dg, cache,
+                                                  elements_to_remove)
     end
 
     return nothing

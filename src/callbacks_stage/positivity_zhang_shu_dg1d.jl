@@ -110,4 +110,59 @@ function limiter_zhang_shu!(u, threshold::Real, variable, mesh::AbstractMesh{1},
 
     return nothing
 end
+
+# Modified version of the limiter used in the coarsening step of the AMR callback.
+# To ensure admissibility after the coarsening step, we apply the limiter to
+# the coarsened elements.
+function limiter_zhang_shu!(u, threshold::Real, variable,
+                            mesh::AbstractMesh{1}, equations, dg::DGSEM, cache,
+                            removed_elements::Vector{Int})
+    @assert length(removed_elements) % (2^ndims(mesh))==0 "The length of `removed_elements` must be a multiple of 2^ndims(mesh)."
+
+    @unpack weights = dg.basis
+    @unpack inverse_jacobian = cache.elements
+
+    # Precompute list with new element ids after refinement
+    element_ids_new = zeros(Int, div(length(removed_elements), 2^ndims(mesh)))
+    for i in eachindex(element_ids_new)
+        # The new element id is the id of the first child minus (2^ndims(mesh) - 1) times the number of already coarsened elements.
+        element_ids_new[i] = removed_elements[4 * (i - 1) + 1] -
+                             (2^ndims(mesh) - 1) * (i - 1)
+    end
+
+    # Apply limiter to coarsened elements
+    @threaded for element in element_ids_new
+        # determine minimum value
+        value_min = typemax(eltype(u))
+        for i in eachnode(dg)
+            u_node = get_node_vars(u, equations, dg, i, element)
+            value_min = min(value_min, variable(u_node, equations))
+        end
+
+        # detect if limiting is necessary
+        value_min < threshold || continue
+
+        # compute mean value
+        u_mean = zero(get_node_vars(u, equations, dg, 1, element))
+        total_volume = zero(eltype(u))
+        for i in eachnode(dg)
+            u_node = get_node_vars(u, equations, dg, i, element)
+            u_mean += u_node * weights[i]
+        end
+        # note that the reference element is [-1,1]^ndims(dg), thus the weights sum to 2
+        u_mean = u_mean / 2^ndims(mesh)
+
+        # We compute the value directly with the mean values, as we assume that
+        # Jensen's inequality holds (e.g. pressure for compressible Euler equations).
+        value_mean = variable(u_mean, equations)
+        theta = (value_mean - threshold) / (value_mean - value_min)
+        for i in eachnode(dg)
+            u_node = get_node_vars(u, equations, dg, i, element)
+            set_node_vars!(u, theta * u_node + (1 - theta) * u_mean,
+                           equations, dg, i, element)
+        end
+    end
+
+    return nothing
+end
 end # @muladd
