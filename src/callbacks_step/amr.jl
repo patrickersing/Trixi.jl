@@ -897,6 +897,52 @@ function compute_new_ids_coarsened_elements(elements_to_remove, mesh)
     return element_ids_new
 end
 
+# Auxiliary function to compute the new element ids for refined and coarsened elements
+# Used when applying positivity limiter after refinement and coarsening step for T8codeMesh
+function compute_new_ids_refined_coarsened_elements(difference, mesh::T8codeMesh,
+                                                    old_nelems, new_nelems)
+    T8_CHILDREN = 2^ndims(mesh)
+
+    @assert sum(difference .< 0) % T8_CHILDREN==0 "$(difference .< 0)"
+
+    refined_element_ids_new = Vector{Int}(undef, sum(difference .> 0))
+    coarsened_element_ids_new = Vector{Int}(undef,
+                                            div(sum(difference .< 0), T8_CHILDREN))
+    refined_index = 0
+    coarsened_index = 0
+
+    # Local element indices.
+    old_index = 1
+    new_index = 1
+    while old_index <= old_nelems && new_index <= new_nelems
+        if difference[old_index] > 0 # Refine.
+            refined_index += 1
+            refined_element_ids_new[refined_index] = new_index
+
+            # Increment `old_index` on the original mesh and the `new_index`
+            # on the refined mesh with the number of children, i.e., T8_CHILDREN = 4
+            old_index += 1
+            new_index += T8_CHILDREN
+        elseif difference[old_index] < 0 # Coarsen.
+            coarsened_index += 1
+            coarsened_element_ids_new[coarsened_index] = new_index
+
+            # Increment `old_index` on the original mesh with the number of children
+            # (T8_CHILDREN = 4 in 2D) and the `new_index` by one for the single
+            # coarsened element
+            old_index += T8_CHILDREN
+            new_index += 1
+        else # No changes.
+            # No refinement / coarsening occurred, so increment element index
+            # on each mesh by one
+            old_index += 1
+            new_index += 1
+        end
+    end
+
+    return refined_element_ids_new, coarsened_element_ids_new
+end
+
 """
     ControllerThreeLevel(semi, indicator; base_level=1,
                                           med_level=base_level, med_threshold=0.0,
