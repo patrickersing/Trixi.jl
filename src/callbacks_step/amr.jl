@@ -869,7 +869,8 @@ end
 # Used when applying positivity limiter after refinement step
 # Saves every first id of the 2^ndims child elements
 # All child elements can be addressed with element_ids_new[i]:(element_ids_new[i] + 2^ndims - 1)
-function compute_new_ids_refined_elements(elements_to_refine, mesh)
+function compute_new_ids_refined_elements(elements_to_refine,
+                                          mesh::Union{TreeMesh, P4estMesh})
     element_ids_new = copy(elements_to_refine)
     for i in eachindex(element_ids_new)
         # Each refined element increases all ids of the following elements by 2^ndims - 1
@@ -883,7 +884,8 @@ end
 
 # Auxiliary function to compute the new element ids for coarsened elements
 # Used when applying positivity limiter after coarsening step
-function compute_new_ids_coarsened_elements(elements_to_remove, mesh)
+function compute_new_ids_coarsened_elements(elements_to_remove,
+                                            mesh::Union{TreeMesh, P4estMesh})
     @assert length(elements_to_remove) % (2^ndims(mesh))==0 "The length of `elements_to_remove` must be a multiple of 2^ndims(mesh)."
 
     element_ids_new = zeros(Int, div(length(elements_to_remove), 2^ndims(mesh)))
@@ -901,8 +903,12 @@ end
 # Used when applying positivity limiter after refinement and coarsening step for T8codeMesh
 function compute_new_ids_refined_coarsened_elements(difference, mesh::T8codeMesh,
                                                     old_nelems, new_nelems)
-    T8_CHILDREN = 2^ndims(mesh)
+    T8_CHILDREN = 2^ndims(mesh) # number of children elements
 
+    # The `difference` vector has the length `old_nelems`.
+    # It contains a `1` at the specific index (= element id) if the element was refined,
+    # and `T8_CHILDREN` consecutive `-1`s if those elements were coarsened.
+    # Non-refined/coarsened elements have a `0` at their specific index.
     @assert sum(difference .< 0) % T8_CHILDREN==0 "$(difference .< 0)"
 
     refined_element_ids_new = Vector{Int}(undef, sum(difference .> 0))
