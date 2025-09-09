@@ -48,42 +48,35 @@ function limiter_zhang_shu!(u, threshold::Real, variable, mesh::AbstractMesh{1},
                             element_ids_new::Vector{Int}, u_mean_refined_elements)
     @assert length(element_ids_new)==size(u_mean_refined_elements, 2) "The length of `element_ids_new` must match the second dimension of `u_mean_refined_elements`."
 
-    @threaded for i in eachindex(element_ids_new)
+    @threaded for idx in eachindex(element_ids_new)
         # Get the mean value from the parent element
-        u_mean = get_node_vars(u_mean_refined_elements, equations, dg, i)
+        u_mean = get_node_vars(u_mean_refined_elements, equations, dg, idx)
 
         # We compute the value directly with the mean values, as we assume that
         # Jensen's inequality holds (e.g. pressure for compressible Euler equations).
         value_mean = variable(u_mean, equations)
-
-        theta = one(eltype(u))
+        theta = one(eltype(u)) # Limiting coefficient
 
         # Iterate over the children of the current element to determine a joint limiting coefficient `theta`
-        for new_element_id in element_ids_new[i]:(element_ids_new[i] + 2^ndims(mesh) - 1)
+        for new_element_id in element_ids_new[idx]:(element_ids_new[idx] + 2^ndims(mesh) - 1)
             # determine minimum value
             value_min = typemax(eltype(u))
             for i in eachnode(dg)
                 u_node = get_node_vars(u, equations, dg, i, new_element_id)
                 value_min = min(value_min, variable(u_node, equations))
             end
-
-            # detect if limiting is necessary
-            value_min < threshold || continue
+            value_min < threshold || continue # Detect if limiting is necessary
 
             theta = min(theta, (value_mean - threshold) / (value_mean - value_min))
         end
 
-        theta < 1 || continue
-
-        # Make sure to really reach the threshold and not only by machine precision
-        theta -= eps(typeof(theta))
+        theta < 1 || continue # Check if limiting action is necessary
 
         # Iterate again over the children to apply joint shifting
-        for new_element_id in element_ids_new[i]:(element_ids_new[i] + 2^ndims(mesh) - 1)
+        for new_element_id in element_ids_new[idx]:(element_ids_new[idx] + 2^ndims(mesh) - 1)
             for i in eachnode(dg)
                 u_node = get_node_vars(u, equations, dg, i, new_element_id)
-                set_node_vars!(u,
-                               theta * u_node + (1 - theta) * u_mean,
+                set_node_vars!(u, theta * u_node + (1 - theta) * u_mean,
                                equations, dg, i, new_element_id)
             end
         end
@@ -109,9 +102,7 @@ function limiter_zhang_shu!(u, threshold::Real, variable,
             u_node = get_node_vars(u, equations, dg, i, element)
             value_min = min(value_min, variable(u_node, equations))
         end
-
-        # detect if limiting is necessary
-        value_min < threshold || continue
+        value_min < threshold || continue # Detect if limiting is necessary
 
         u_mean = compute_u_mean(u, element, mesh, equations, dg, cache)
 
